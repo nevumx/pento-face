@@ -11,7 +11,7 @@ import SpriteKit
 
 class InterfaceController: WKInterfaceController {
 	@IBOutlet weak var scene: WKInterfaceSKScene!
-	weak var watchFaceScene: FaceScene?
+	weak var watchFaceScene: FaceScene!
 	
 	override func awake(withContext context: Any?) {
         super.awake(withContext: context)
@@ -29,11 +29,11 @@ class InterfaceController: WKInterfaceController {
 	
 	override func didDeactivate() {
 		super.didDeactivate()
-		watchFaceScene!.pause()
+		watchFaceScene.pause()
 	}
 	
 	override func willActivate() {
 		super.willActivate()
-		watchFaceScene!.resume()
+		watchFaceScene.resume()
 	}
 }

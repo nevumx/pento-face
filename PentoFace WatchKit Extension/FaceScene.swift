@@ -13,7 +13,7 @@ fileprivate let animationSpeed = 5.0
 fileprivate let animationScaleMultiplier = CGFloat(2.0)
 
 fileprivate class TimeOffsetNode {
-	private static let secondOffsetPerUnit = 1.0 / 250
+	private static let secondOffsetPerUnit = 1.0 / 300
 	
 	let node: SKNode
 	let baseNode: SKNode
@@ -187,7 +187,7 @@ fileprivate class PentominoPool {
 class FaceScene : SKScene {
 	private var pentominoPools = [Pentomino:PentominoPool]()
 	private var digits = [Digit]()
-	private var hourMinuteSeparator: SKNode?
+	private var hourMinuteSeparator: SKNode!
 	private var previousTime: TimeInterval?
 	private var preventUpdate = false
 	fileprivate static var showSeparator = false
@@ -227,7 +227,7 @@ class FaceScene : SKScene {
 		let deltaTime = currentTime - previousTime!
 		previousTime = currentTime
 		
-		hourMinuteSeparator?.alpha = CGFloat(interpolateTowards(current: Double(hourMinuteSeparator?.alpha ?? 0), destination: FaceScene.showSeparator ? 1 : 0, speed: animationSpeed, deltaTime: deltaTime))
+		hourMinuteSeparator.alpha = CGFloat(interpolateTowards(current: Double(hourMinuteSeparator.alpha), destination: FaceScene.showSeparator ? 1 : 0, speed: animationSpeed, deltaTime: deltaTime))
 		
 		let now = Date() // .advanced(by: TimeInterval(18 * 3600 + 17 * 60))
 		for digit in digits {
