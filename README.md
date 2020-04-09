@@ -19,3 +19,7 @@ Fire up the latest XCode, open the project, select an apple watch simulator, or 
 # License
 This software was created by Nicholaos Mouzourakis, who has made it a part of the public domain.
 See the License for details.
+
+# Screenshots
+![Screen1](Screens/Screen1.png)
+![Screen2](Screens/Screen2.png)
