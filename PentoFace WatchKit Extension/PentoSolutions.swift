@@ -18,7 +18,8 @@ struct PentominoInstance {
 	let columnOffset: UInt8
 }
 
-let solutions = [
+let solutions =
+[
 	[
 		[
 			PentominoInstance(pentomino: Pentomino.PentominoU, flipped: false, rotations: 3, rowOffset: 0, columnOffset: 2),

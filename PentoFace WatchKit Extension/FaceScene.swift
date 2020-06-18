@@ -137,7 +137,7 @@ fileprivate class Digit : TimeOffsetNode {
 		}
 		for i in (0..<pentomiNodes.count).reversed() {
 			pentomiNodes[i].update(withDate: now, deltaTime: deltaTime)
-			if (pentomiNodes[i].finished) {
+			if pentomiNodes[i].finished {
 				pentomiNodes.remove(at: i)
 			}
 		}
@@ -193,6 +193,8 @@ class FaceScene : SKScene {
 	fileprivate static var showSeparator = false
 	
 	override func sceneDidLoad() {
+		super.sceneDidLoad()
+		
 		for pentomino in Pentomino.allCases {
 			pentominoPools[pentomino] = PentominoPool(prototype: childNode(withName: pentomino.rawValue)!)
 		}
@@ -200,6 +202,8 @@ class FaceScene : SKScene {
 	}
 	
 	override func update(_ currentTime: TimeInterval) {
+		super.update(currentTime)
+		
 		if preventUpdate {
 			return
 		}

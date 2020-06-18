@@ -18,8 +18,7 @@ extension SKNode {
 	var globalPosition: CGPoint { get { convert(CGPoint(), to: scene!) } }
 }
 
-func interpolateTowards(current: Double, destination: Double, speed: Double, deltaTime: Double) -> Double
-{
+func interpolateTowards(current: Double, destination: Double, speed: Double, deltaTime: Double) -> Double {
 	let distance = destination - current;
 
 	if abs(distance) < 0.001 {
@@ -58,7 +57,7 @@ extension Date {
 	var hours: UInt8 {
 		get {
 			var hour = UInt8(Calendar.current.component(.hour, from: self))
-			if (!is24Hour) {
+			if !is24Hour {
 				hour = hour % 12
 				if hour == 0 {
 					return 12
