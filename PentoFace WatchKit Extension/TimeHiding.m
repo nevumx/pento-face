@@ -1,6 +1,6 @@
 //
 //  TimeHiding.m
-//  WatchFaceTest WatchKit Extension
+//  PentoFace WatchKit Extension
 //
 //  Created by Nicholaos Mouzourakis on 2020-04-03.
 //  Copyright © 2020 NEVUM X. All rights reserved.

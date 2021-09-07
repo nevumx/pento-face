@@ -1,6 +1,6 @@
 //
 //  FaceScene.swift
-//  WatchFaceTest WatchKit Extension
+//  PentoFace WatchKit Extension
 //
 //  Created by Nicholaos Mouzourakis on 2020-03-29.
 //  Copyright © 2020 NEVUM X. All rights reserved.
@@ -19,15 +19,15 @@ fileprivate class TimeOffsetNode {
 	let baseNode: SKNode
 	let getDisplayNumber: (Date) -> UInt8
 	let displayDigitTens: Bool
-	var waitForDisplayNumber: Bool
-	var numberToWaitFor: UInt8 = 0
+	var finishedWaitingForOpeningAnimation: Bool
+	var digitToWaitFor: UInt8 = 0
 	
-	init(node: SKNode, baseNode: SKNode, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, waitForDisplayNumber: Bool) {
+	init(node: SKNode, baseNode: SKNode, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, finishedWaitingForOpeningAnimation: Bool) {
 		self.node = node
 		self.baseNode = baseNode
 		self.getDisplayNumber = getDisplayNumber
 		self.displayDigitTens = displayDigitTens
-		self.waitForDisplayNumber = waitForDisplayNumber
+		self.finishedWaitingForOpeningAnimation = finishedWaitingForOpeningAnimation
 	}
 	
 	func getDisplayDigit(displayNumber: UInt8) -> UInt8 {
@@ -41,38 +41,40 @@ fileprivate class TimeOffsetNode {
 	
 	private func getCurrentDigit(baseDate: Date) -> UInt8 {
 		let nodeDate = getNodeDate(baseDate: baseDate)
-		return waitForDisplayNumber ? getDisplayDigit(displayNumber: getDisplayNumber(nodeDate)) : (nodeDate.seconds % 10)
+		return finishedWaitingForOpeningAnimation ? getDisplayDigit(displayNumber: getDisplayNumber(nodeDate)) : (nodeDate.seconds % 10)
 	}
 	
 	func incrementNextNumberToWaitFor(baseDate: Date) {
-		waitForDisplayNumber = true
-		numberToWaitFor = getCurrentDigit(baseDate: baseDate)
+		finishedWaitingForOpeningAnimation = true
+		digitToWaitFor = getCurrentDigit(baseDate: baseDate)
 	}
 	
 	func shouldAnimate(baseDate: Date) -> Bool {
-		waitForDisplayNumber ? getCurrentDigit(baseDate: baseDate) != numberToWaitFor : getCurrentDigit(baseDate: baseDate) == numberToWaitFor
+		finishedWaitingForOpeningAnimation ? getCurrentDigit(baseDate: baseDate) != digitToWaitFor : getCurrentDigit(baseDate: baseDate) == digitToWaitFor
 	}
+}
+
+fileprivate enum AnimationState {
+	case WaitingToEnter, AnimatingEnter, WaitingToExit, AnimatingExit, Finished
 }
 
 fileprivate class PentomiNode : TimeOffsetNode {
 	private let nodePool: PentominoPool
-	private let digit: Digit
-	private var exiting = false
-	private var animating = false
+	private let digitNode: DigitNode
 	
-	private(set) var finished: Bool = false
+	private(set) var animationState: AnimationState = .WaitingToEnter
 	
-	init(nodePool: PentominoPool, digit: Digit, baseNode: SKNode, pentominoInstance: PentominoInstance, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, numberToWaitFor: UInt8, waitForDisplayNumber: Bool) {
+	init(nodePool: PentominoPool, digitNode: DigitNode, baseNode: SKNode, pentominoInstance: PentominoInstance, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, digitToWaitFor: UInt8, finishedWaitingForOpeningAnimation: Bool) {
 		self.nodePool = nodePool
-		self.digit = digit
+		self.digitNode = digitNode
 		
 		super.init(node: nodePool.getPentomino(
-			newPosition: self.digit.node.position
-				+ CGPoint(x: CGFloat(pentominoInstance.columnOffset) * self.digit.node.xScale, y: -CGFloat(pentominoInstance.rowOffset) * self.digit.node.yScale),
-			newScale: CGPoint(x: self.digit.node.xScale * (pentominoInstance.flipped ? -1 : 1),
-							  y: self.digit.node.yScale),
+			newPosition: self.digitNode.node.position
+				+ CGPoint(x: CGFloat(pentominoInstance.columnOffset) * self.digitNode.node.xScale, y: -CGFloat(pentominoInstance.rowOffset) * self.digitNode.node.yScale),
+			newScale: CGPoint(x: self.digitNode.node.xScale * (pentominoInstance.flipped ? -1 : 1),
+							  y: self.digitNode.node.yScale),
 			newRotation: -CGFloat(pentominoInstance.rotations) * 90.0,
-			newAlpha: 0, newZPosition: 1), baseNode: baseNode, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, waitForDisplayNumber: waitForDisplayNumber)
+			newAlpha: 0, newZPosition: 1), baseNode: baseNode, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, finishedWaitingForOpeningAnimation: finishedWaitingForOpeningAnimation)
 		
 		var upperLeftPoint = self.node.position
 		for child in self.node.children {
@@ -84,7 +86,7 @@ fileprivate class PentomiNode : TimeOffsetNode {
 		self.node.xScale *= animationScaleMultiplier
 		self.node.yScale *= animationScaleMultiplier
 		
-		self.numberToWaitFor = numberToWaitFor
+		self.digitToWaitFor = digitToWaitFor
 	}
 	
 	deinit {
@@ -93,62 +95,75 @@ fileprivate class PentomiNode : TimeOffsetNode {
 	
 	func update(withDate now: Date, deltaTime: Double) {
 		if shouldAnimate(baseDate: now) {
-			if !animating {
-				animating = true
+			switch animationState {
+			case .WaitingToEnter:
+				animationState = .AnimatingEnter
 				incrementNextNumberToWaitFor(baseDate: now)
 				FaceScene.showSeparator = true
-			} else if !exiting {
-				exiting = true
-			} else {
-				finished = true
+			case .AnimatingEnter, .WaitingToExit:
+				animationState = .AnimatingExit
+			default:
+				break
 			}
 		}
-		
-		if animating {
-			node.yScale = CGFloat(interpolateTowards(current: Double(node.yScale), destination: Double(digit.node.yScale), speed: animationSpeed, deltaTime: deltaTime))
+
+		if [.AnimatingEnter, .AnimatingExit].contains(animationState) {
+			node.yScale = CGFloat(interpolateTowards(current: Double(node.yScale), destination: Double(digitNode.node.yScale), speed: animationSpeed, deltaTime: deltaTime))
 			node.xScale = node.xScale < 0 ? -node.yScale : node.yScale
-			node.alpha = CGFloat(interpolateTowards(current: Double(node.alpha), destination: exiting ? 0 : 1, speed: animationSpeed, deltaTime: deltaTime))
-			node.zPosition = CGFloat(interpolateTowards(current: Double(node.zPosition), destination: exiting ? -1 : 0, speed: animationSpeed, deltaTime: deltaTime))
+			node.alpha = CGFloat(interpolateTowards(current: Double(node.alpha), destination: animationState == .AnimatingExit ? 0 : 1, speed: animationSpeed, deltaTime: deltaTime))
+			node.zPosition = CGFloat(interpolateTowards(current: Double(node.zPosition), destination: animationState == .AnimatingExit ? -1 : 0, speed: animationSpeed, deltaTime: deltaTime))
+			
+			switch animationState {
+			case .AnimatingEnter:
+				if node.alpha == 1 {
+					animationState = .WaitingToExit
+				}
+			case .AnimatingExit:
+				if node.alpha == 0 {
+					animationState = .Finished
+				}
+			default:
+				break
+			}
 		}
 	}
 	
 	func exit() {
-		animating = true
-		exiting = true
+		animationState = .AnimatingExit
 	}
 }
 
-fileprivate class Digit : TimeOffsetNode {
+fileprivate class DigitNode : TimeOffsetNode {
 	private var pentomiNodes = [PentomiNode]()
 	
-	init(node: SKNode, baseNode: SKNode, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, numberToWaitFor: UInt8?) {
-		super.init(node: node, baseNode: baseNode, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, waitForDisplayNumber: false)
+	init(node: SKNode, baseNode: SKNode, getDisplayNumber: @escaping (Date) -> UInt8, displayDigitTens: Bool, digitToWaitFor: UInt8?) {
+		super.init(node: node, baseNode: baseNode, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, finishedWaitingForOpeningAnimation: false)
 		
-		self.numberToWaitFor = numberToWaitFor ?? ((getNodeDate(baseDate: Date()).seconds + 1) % 10)
+		self.digitToWaitFor = digitToWaitFor ?? ((getNodeDate(baseDate: Date()).seconds + 1) % 10)
 	}
 	
 	func update(withDate now: Date, pentominoPools: [Pentomino:PentominoPool], deltaTime: Double) {
 		if shouldAnimate(baseDate: now) {
 			let newSolution = solutions[Int(getDisplayDigit(displayNumber: getDisplayNumber(getNodeDate(baseDate: now))))].randomElement()
 			for pentominoInstance in newSolution! {
-				pentomiNodes.append(PentomiNode(nodePool: pentominoPools[pentominoInstance.pentomino]!, digit: self, baseNode: baseNode, pentominoInstance: pentominoInstance, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, numberToWaitFor: numberToWaitFor, waitForDisplayNumber: waitForDisplayNumber))
+				pentomiNodes.append(PentomiNode(nodePool: pentominoPools[pentominoInstance.pentomino]!, digitNode: self, baseNode: baseNode, pentominoInstance: pentominoInstance, getDisplayNumber: getDisplayNumber, displayDigitTens: displayDigitTens, digitToWaitFor: digitToWaitFor, finishedWaitingForOpeningAnimation: finishedWaitingForOpeningAnimation))
 			}
 			incrementNextNumberToWaitFor(baseDate: now)
 		}
 		for i in (0..<pentomiNodes.count).reversed() {
 			pentomiNodes[i].update(withDate: now, deltaTime: deltaTime)
-			if pentomiNodes[i].finished {
+			if pentomiNodes[i].animationState == .Finished {
 				pentomiNodes.remove(at: i)
 			}
 		}
 	}
 	
-	func reset(numberToWaitFor: UInt8) {
+	func reset(digitToWaitFor: UInt8) {
 		for pentomiNode in pentomiNodes {
 			pentomiNode.exit()
 		}
-		waitForDisplayNumber = false
-		self.numberToWaitFor = numberToWaitFor
+		finishedWaitingForOpeningAnimation = false
+		self.digitToWaitFor = digitToWaitFor
 	}
 }
 
@@ -186,7 +201,7 @@ fileprivate class PentominoPool {
 
 class FaceScene : SKScene {
 	private var pentominoPools = [Pentomino:PentominoPool]()
-	private var digits = [Digit]()
+	private var digitNodes = [DigitNode]()
 	private var hourMinuteSeparator: SKNode!
 	private var previousTime: TimeInterval?
 	private var preventUpdate = false
@@ -208,19 +223,19 @@ class FaceScene : SKScene {
 			return
 		}
 		
-		if digits.count <= 0 {
+		if digitNodes.count <= 0 {
 			let baseAnimationNode = childNode(withName: "DigitS1")!
-			digits.append(Digit(node: childNode(withName: "DigitH10")!, baseNode: baseAnimationNode, getDisplayNumber:
-				{ $0.hours }, displayDigitTens: true, numberToWaitFor: nil))
-			digits.append(Digit(node: childNode(withName: "DigitH1")!, baseNode: baseAnimationNode, getDisplayNumber:
-				{ $0.hours }, displayDigitTens: false, numberToWaitFor: digits[0].numberToWaitFor))
-			digits.append(Digit(node: childNode(withName: "DigitM10")!, baseNode: baseAnimationNode, getDisplayNumber:
-				{ $0.minutes }, displayDigitTens: true, numberToWaitFor: digits[0].numberToWaitFor))
-			digits.append(Digit(node: childNode(withName: "DigitM1")!, baseNode: baseAnimationNode, getDisplayNumber:
-				{ $0.minutes }, displayDigitTens: false, numberToWaitFor: digits[0].numberToWaitFor))
-			digits.append(Digit(node: childNode(withName: "DigitS10")!, baseNode: baseAnimationNode, getDisplayNumber:
-				{ $0.seconds }, displayDigitTens: true, numberToWaitFor: digits[0].numberToWaitFor))
-			digits.append(Digit(node: baseAnimationNode, baseNode: baseAnimationNode, getDisplayNumber: { $0.seconds }, displayDigitTens: false, numberToWaitFor: digits[0].numberToWaitFor))
+			digitNodes.append(DigitNode(node: childNode(withName: "DigitH10")!, baseNode: baseAnimationNode, getDisplayNumber:
+				{ $0.hours }, displayDigitTens: true, digitToWaitFor: nil))
+			digitNodes.append(DigitNode(node: childNode(withName: "DigitH1")!, baseNode: baseAnimationNode, getDisplayNumber:
+				{ $0.hours }, displayDigitTens: false, digitToWaitFor: digitNodes[0].digitToWaitFor))
+			digitNodes.append(DigitNode(node: childNode(withName: "DigitM10")!, baseNode: baseAnimationNode, getDisplayNumber:
+				{ $0.minutes }, displayDigitTens: true, digitToWaitFor: digitNodes[0].digitToWaitFor))
+			digitNodes.append(DigitNode(node: childNode(withName: "DigitM1")!, baseNode: baseAnimationNode, getDisplayNumber:
+				{ $0.minutes }, displayDigitTens: false, digitToWaitFor: digitNodes[0].digitToWaitFor))
+			digitNodes.append(DigitNode(node: childNode(withName: "DigitS10")!, baseNode: baseAnimationNode, getDisplayNumber:
+				{ $0.seconds }, displayDigitTens: true, digitToWaitFor: digitNodes[0].digitToWaitFor))
+			digitNodes.append(DigitNode(node: baseAnimationNode, baseNode: baseAnimationNode, getDisplayNumber: { $0.seconds }, displayDigitTens: false, digitToWaitFor: digitNodes[0].digitToWaitFor))
 		}
 		
 		if previousTime == nil {
@@ -233,9 +248,9 @@ class FaceScene : SKScene {
 		
 		hourMinuteSeparator.alpha = CGFloat(interpolateTowards(current: Double(hourMinuteSeparator.alpha), destination: FaceScene.showSeparator ? 1 : 0, speed: animationSpeed, deltaTime: deltaTime))
 		
-		let now = Date() // .advanced(by: TimeInterval(18 * 3600 + 17 * 60))
-		for digit in digits {
-			digit.update(withDate: now, pentominoPools: pentominoPools, deltaTime: deltaTime)
+		let now = Date()
+		for digitNode in digitNodes {
+			digitNode.update(withDate: now, pentominoPools: pentominoPools, deltaTime: deltaTime)
 		}
 	}
 	
@@ -246,8 +261,8 @@ class FaceScene : SKScene {
 	func resume() {
 		if preventUpdate {
 			let now = Date()
-			for digit in digits {
-				digit.reset(numberToWaitFor: (digits[0].getNodeDate(baseDate: now).seconds + 1) % 10)
+			for digitNode in digitNodes {
+				digitNode.reset(digitToWaitFor: (digitNodes[0].getNodeDate(baseDate: now).seconds + 1) % 10)
 			}
 			FaceScene.showSeparator = false
 			previousTime = nil
